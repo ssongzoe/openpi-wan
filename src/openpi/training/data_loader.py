@@ -15,6 +15,12 @@ import openpi.models.model as _model
 import openpi.training.config as _config
 from openpi.training.droid_rlds_dataset import DroidRldsDataset
 import openpi.transforms as _transforms
+import datasets.features.features as hf_features
+
+# LeRobot v2.1 Parquet metadata written by datasets>=4 uses "List".
+# OpenPI의 datasets==3.6.0에서는 동등한 타입인 "Sequence"로 해석한다.
+if "List" not in hf_features._FEATURE_TYPES:
+    hf_features._FEATURE_TYPES["List"] = hf_features.Sequence
 
 T_co = TypeVar("T_co", covariant=True)
 
