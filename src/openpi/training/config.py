@@ -18,11 +18,13 @@ import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.rby1_policy as rby1_policy
-import openpi.policies.rby1_whole_body_policy as rby1_whole_body_policy
+import openpi.policies.rby1_mobile_right_arm_policy as mobile_right_arm_policy
+import openpi.policies.rby1_whole_body_31action_policy as rby1_whole_body_31action_policy
 
 import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
+import openpi.policies.libero_plus_policy as libero_plus_policy
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.droid_rlds_dataset as droid_rlds_dataset
@@ -335,7 +337,7 @@ class LeRobotRBY1EEDataConfig(DataConfigFactory):
         )
 
 @dataclasses.dataclass(frozen=True)
-class LeRobotRBY1WholeBodyDataConfig(DataConfigFactory):
+class LeRobotRBY1MobileRightArmDataConfig(DataConfigFactory):
     """LeRobot config for RBY1 right-arm mobile manipulation.
 
     State:
@@ -382,10 +384,10 @@ class LeRobotRBY1WholeBodyDataConfig(DataConfigFactory):
     ) -> DataConfig:
         data_transforms = _transforms.Group(
             inputs=[
-                rby1_whole_body_policy.RBY1WholeBodyInputs()
+                mobile_right_arm_policy.RBY1WholeBodyInputs()
             ],
             outputs=[
-                rby1_whole_body_policy.RBY1WholeBodyOutputs()
+                mobile_right_arm_policy.RBY1WholeBodyOutputs()
             ],
         )
 
@@ -409,7 +411,98 @@ class LeRobotRBY1WholeBodyDataConfig(DataConfigFactory):
         )
 
 
+@dataclasses.dataclass(frozen=True)
+class LeRobotRBY1WholeBody31ActionDataConfig(DataConfigFactory):
+    """LeRobot v3.0 config for RB-Y1 whole-body manipulation.
 
+    State 24D:
+        torso joints 6D
+        + right arm joints 7D
+        + left arm joints 7D
+        + head joints 2D
+        + grippers 2D
+
+    Action 31D:
+        torso absolute EE target 6D
+        + right absolute EE target 6D
+        + left absolute EE target 6D
+        + right null-space commands 3D
+        + left null-space commands 3D
+        + head positions 2D
+        + grippers 2D
+        + base velocity 3D
+
+    Cameras:
+        front + left wrist + right wrist
+    """
+
+    default_prompt: str = (
+        rby1_whole_body_31action_policy.DEFAULT_BOBBIN_PROMPT
+    )
+
+    repack_transforms: tyro.conf.Suppress[
+        _transforms.Group
+    ] = dataclasses.field(
+        default=_transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/front_image":
+                            "observation.images.front",
+                        "observation/left_image":
+                            "observation.images.left",
+                        "observation/right_image":
+                            "observation.images.right",
+                        "observation/state":
+                            "observation.state",
+                        "actions":
+                            "action",
+                        "action_valid_mask":
+                            "action_valid_mask",
+                    }
+                )
+            ]
+        )
+    )
+
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    @override
+    def create(
+        self,
+        assets_dirs: pathlib.Path,
+        model_config: _model.BaseModelConfig,
+    ) -> DataConfig:
+
+        data_transforms = _transforms.Group(
+            inputs=[
+                rby1_whole_body_31action_policy.RBY1WholeBody31ActionInputs(
+                    prompt_override=self.default_prompt
+                )
+            ],
+            outputs=[
+                rby1_whole_body_31action_policy.RBY1WholeBody31ActionOutputs()
+            ],
+        )
+
+        # EE target, null-space, head, gripper, base velocity:
+        # 원본 Action을 그대로 사용한다.
+        # DeltaActions는 적용하지 않는다.
+
+        model_transforms = ModelTransformFactory(
+            default_prompt=self.default_prompt
+        )(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(
+                assets_dirs,
+                model_config,
+            ),
+            repack_transforms=self.repack_transforms,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -540,6 +633,48 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
         )
+
+
+
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotLiberoPlusDataConfig(DataConfigFactory):
+    """LeRobot v3.0 LIBERO-Plus dataset configuration."""
+
+    @override
+    def create(
+        self,
+        assets_dirs: pathlib.Path,
+        model_config: _model.BaseModelConfig,
+    ) -> DataConfig:
+
+        data_transforms = _transforms.Group(
+            inputs=[
+                libero_plus_policy.LiberoPlusInputs(
+                    model_type=model_config.model_type,
+                )
+            ],
+            outputs=[
+                libero_plus_policy.LiberoPlusOutputs()
+            ],
+        )
+
+        model_transforms = ModelTransformFactory()(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=("action",),
+            prompt_from_task=False,
+        )
+
+
+
+
+
+
+
 
 
 @dataclasses.dataclass(frozen=True)
@@ -755,7 +890,7 @@ _CONFIGS = [
             action_dim=32,
             action_horizon=40,
         ),
-        data=LeRobotRBY1WholeBodyDataConfig(
+        data=LeRobotRBY1MobileRightArmDataConfig(
             repo_id=(
                 "rainbowrobotics/"
                 "open_door_mobile_all_260819_essential"
@@ -849,30 +984,30 @@ _CONFIGS = [
     # RBY1 Training
 
     TrainConfig(
-        name="box_260721",
+        name="pi05_rby1_flower_0626",
         model=pi0_config.Pi0Config(
             pi05=True,
             action_horizon=40,
         ),
         data=LeRobotRBY1DataConfig(
-            repo_id="rainbowrobotics/box_test_260721",
+            repo_id="opening_ceremony_0626",
             base_config=DataConfig(prompt_from_task=True),
             use_delta_joint_actions=True,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        batch_size=128,
-        num_train_steps=50_000,
+        batch_size=392,
+        num_train_steps=100_000,
         log_interval=50,
-        save_interval=10_000,
+        save_interval=20_000,
         wandb_enabled=True,
         num_workers=20,
         fsdp_devices=1,
         freeze_filter=nnx.Nothing,
-        seed=42,
+        seed=1000,
         lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=900,
+            warmup_steps=2400,
             peak_lr=2.5e-5,
-            decay_steps=30_000,
+            decay_steps=80_000,
             decay_lr=2.5e-6,
         ),
         optimizer=_optimizer.AdamW(
@@ -887,6 +1022,111 @@ _CONFIGS = [
         #     action_expert_variant="gemma_300m_lora"
         # ).get_freeze_filter()
     ),
+
+
+    TrainConfig(
+        name="pi05_rby1_bobbin_wan",
+
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=32,
+            action_horizon=50,
+        ),
+
+        data=LeRobotRBY1WholeBody31ActionDataConfig(
+            repo_id="rainbowrobotics/wb_test_20261118",
+            base_config=DataConfig(
+                prompt_from_task=False,
+            ),
+        ),
+
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi05_base/params"
+        ),
+
+        batch_size=32,
+        num_train_steps=10_000,
+
+        log_interval=50,
+        save_interval=2_000,
+        keep_period=2_000,
+
+        wandb_enabled=False,
+        num_workers=2,
+        fsdp_devices=1,
+
+        # Full fine-tuning
+        freeze_filter=nnx.Nothing,
+        seed=42,
+
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=500,
+            peak_lr=2.5e-5,
+            decay_steps=10_000,
+            decay_lr=2.5e-6,
+        ),
+
+        optimizer=_optimizer.AdamW(
+            b1=0.9,
+            b2=0.95,
+            eps=1e-8,
+            weight_decay=0.01,
+            clip_gradient_norm=1.0,
+        ),
+    ),
+
+
+
+    TrainConfig(
+        name="pi05_libero_plus",
+
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=32,
+            action_horizon=50,
+        ),
+
+        data=LeRobotLiberoPlusDataConfig(
+            repo_id="lerobot/libero_plus",
+        ),
+
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi05_base/params"
+        ),
+
+        batch_size=8,
+        num_train_steps=100_000,
+
+        log_interval=50,
+        save_interval=5_000,
+        keep_period=5_000,
+
+        wandb_enabled=False,
+        num_workers=4,
+        fsdp_devices=2,
+
+        freeze_filter=nnx.Nothing,
+        seed=42,
+
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=2.5e-5,
+            decay_steps=100_000,
+            decay_lr=2.5e-6,
+        ),
+
+        optimizer=_optimizer.AdamW(
+            b1=0.9,
+            b2=0.95,
+            eps=1e-8,
+            weight_decay=0.01,
+            clip_gradient_norm=1.0,
+        ),
+    ),
+
+
+
+
     
     #
     # Inference Aloha configs.

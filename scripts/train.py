@@ -21,7 +21,12 @@ import openpi.shared.array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 import openpi.training.checkpoints as _checkpoints
 import openpi.training.config as _config
-import openpi.training.data_loader as _data_loader
+
+# for lerobot 2.1 format
+# import openpi.training.data_loader as _data_loader
+# for lerobot 3.0 format
+import openpi_wan.training.lerobot_v3_loader as _data_loader
+
 import openpi.training.optimizer as _optimizer
 import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
