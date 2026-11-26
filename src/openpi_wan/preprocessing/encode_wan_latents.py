@@ -428,7 +428,6 @@ def main() -> None:
                     if args.resume and _check_existing(
                         save_path, ep_id=ep_id, n_source_frames=int(dataset.episodes[ep_id]["length"])
                     ):
-                        print(f"SKIP verified: camera={camera}, episode={ep_id}", flush=True)
                         continue
                     if not args.overwrite:
                         raise FileExistsError(f"Existing result: {save_path} (use --resume or --overwrite)")
