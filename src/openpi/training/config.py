@@ -881,92 +881,42 @@ class TrainConfig:
 # Use `get_config` if you need to get a config by name in your code.
 _CONFIGS = [
 
-
     TrainConfig(
-        name="pi05_rby1_open_door_mobile_260819",
+        name="pi05_rby1_bobbin_all_1",
 
         model=pi0_config.Pi0Config(
             pi05=True,
             action_dim=32,
             action_horizon=40,
         ),
-        data=LeRobotRBY1MobileRightArmDataConfig(
-            repo_id=(
-                "rainbowrobotics/"
-                "open_door_mobile_all_260819_essential"
-            ),
-            base_config=DataConfig(
-                prompt_from_task=True,
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "gs://openpi-assets/checkpoints/"
-            "pi05_base/params"
-        ),
-        batch_size=108,
-        num_train_steps=50_000,
 
-        log_interval=50,
-        # 약 4.5 epochs마다 checkpoint
-        save_interval=5_000,
-        keep_period=5_000,
-        wandb_enabled=False,
-        num_workers=8,
-        fsdp_devices=1,
-
-        # Full fine-tuning
-        freeze_filter=nnx.Nothing,
-        seed=42,
-        lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=900,
-            peak_lr=2.5e-5,
-            decay_steps=30_000,
-            decay_lr=2.5e-6,
+        data=LeRobotRBY1WholeBody31ActionDataConfig(
+            repo_id="rainbowrobotics/bobbin_all_1",
+            base_config=DataConfig(prompt_from_task=False),
         ),
 
-        optimizer=_optimizer.AdamW(
-            b1=0.9,
-            b2=0.95,
-            eps=1e-8,
-            weight_decay=0.01,
-            clip_gradient_norm=1.0,
-        ),
-    ),
-
-
-    TrainConfig(
-        name="rby1_box_260729",
-        model=pi0_config.Pi0Config(
-            pi05=True,
-            action_dim=32,
-            action_horizon=40,
-        ),
-        data=LeRobotRBY1EEDataConfig(
-            repo_id="rainbowrobotics/box_tilting_v2",
-            base_config=DataConfig(
-                prompt_from_task=True,
-            ),
-            default_prompt="Rotate the box 90 degrees upward",
-        ),
         weight_loader=weight_loaders.CheckpointWeightLoader(
             "gs://openpi-assets/checkpoints/pi05_base/params"
         ),
 
-        batch_size=126,
-        num_train_steps=50_000,
-        log_interval=50,
-        save_interval=5_000,
-        keep_period=5_000,
+        batch_size=256,
+        num_train_steps=100_000,
+
+        log_interval=100,
+        save_interval=10_000,
+        keep_period=10_000,
+
         wandb_enabled=True,
         num_workers=20,
         fsdp_devices=1,
+
         freeze_filter=nnx.Nothing,
-        seed=42,
+        seed=1000,
 
         lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=900,
+            warmup_steps=2400,
             peak_lr=2.5e-5,
-            decay_steps=30_000,
+            decay_steps=80_000,
             decay_lr=2.5e-6,
         ),
 
@@ -978,7 +928,6 @@ _CONFIGS = [
             clip_gradient_norm=1.0,
         ),
     ),
-
 
 
     # RBY1 Training
